@@ -5,11 +5,22 @@ from pydub import AudioSegment
 import os
 import time
 
+# The following lines should be at the end of your script
+intents = nextcord.Intents.default()
+intents.message_content = True
+
+bot = commands.Bot(command_prefix=">>", intents=intents)
+
+
 class YTDL(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(
+    @commands.Cog.listener()
+    async def on_slash_command_error(self, ctx, error):
+        await ctx.send(f"An error occurred: {error}")
+
+    @nextcord.slash_command(
         name="ytdl",
         description="Download audio from YouTube and send as an MP3 file."
     )
@@ -95,6 +106,7 @@ class YTDL(commands.Cog):
             await ctx.send("Please provide a valid YouTube URL or search query.")
         else:
             await ctx.send(f"An error occurred: {error}")
+
 
 def setup(bot):
     bot.add_cog(YTDL(bot))

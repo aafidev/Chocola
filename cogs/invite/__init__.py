@@ -9,7 +9,7 @@ class Invite(commands.Cog):
         self.bot = bot
 
     # If the user types >>invite, the bot will generate an invite link for itself
-    @commands.command(name='invite', aliases=['inv'])
+    @nextcord.slash_command(name='invite', description="Invite Chocola to your server!")
     async def invite(self, ctx):
         embed = nextcord.Embed(
             title="Invite Link:",

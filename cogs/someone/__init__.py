@@ -61,7 +61,7 @@ class Someone(commands.Cog):
         self.db_connection.commit()
         return member_ids
 
-    @commands.command(name="scan_members")
+    @nextcord.slash_command(name="scan_members")
     async def scan_members(self, ctx):
         member_ids = self.scan_all_members()
         await ctx.send(f"Scanned and added {len(member_ids)} members to the database.")
@@ -80,7 +80,7 @@ class Someone(commands.Cog):
         ''', (member.id,))
         self.db_connection.commit()
 
-    @commands.command(name="someone")
+    @nextcord.slash_command(name="someone")
     async def _someone(self, ctx):
         member_ids = self.scan_all_members()
 

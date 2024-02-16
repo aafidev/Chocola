@@ -63,20 +63,25 @@ class SoundCog(commands.Cog):
         conn.commit()
         conn.close()
 
-    def get_custom_sound(self, guild_id):
+    def get_custom_sounds(self):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Retrieve a custom sound for the given guild from the database
-        cursor.execute("SELECT sound_url FROM custom_sounds WHERE guild_id = ?", (guild_id,))
-        result = cursor.fetchone()
+        # Retrieve all custom sounds from the database
+        cursor.execute("SELECT guild_id, sound_url FROM custom_sounds")
+        results = cursor.fetchall()
 
         conn.close()
 
-        if result:
-            return result[0]  # Return the URL of the custom sound
-        else:
-            return None  # Return None if no custom sound is found
+        # Organize the results by guild_id
+        custom_sounds_dict = {}
+        for result in results:
+            guild_id, sound_url = result
+            if guild_id not in custom_sounds_dict:
+                custom_sounds_dict[guild_id] = []
+            custom_sounds_dict[guild_id].append(sound_url)
+
+        return custom_sounds_dict
 
     @tasks.loop(seconds=5)
     async def check_vc(self):
@@ -106,11 +111,12 @@ class SoundCog(commands.Cog):
 
     async def play_random_sound(self, voice_client, guild_id):
         # Check for custom sounds in the database
-        custom_sounds = self.get_custom_sounds(guild_id)
+        custom_sounds_dict = self.get_custom_sounds()
 
-        if custom_sounds:
-            # Select a random custom sound file
-            custom_sound = random.choice(custom_sounds)
+        if custom_sounds_dict:
+            # Select a random custom sound file from all guilds
+            all_custom_sounds = [sound for guild_sounds in custom_sounds_dict.values() for sound in guild_sounds]
+            custom_sound = random.choice(all_custom_sounds)
             sound_file = custom_sound
         else:
             # Use predefined sound effects if no custom sound is found
@@ -196,26 +202,40 @@ class SoundCog(commands.Cog):
         print(f"Is connected: {voice_client.is_connected()}")
         print(f"Is playing: {voice_client.is_playing()}")
 
-    def get_custom_sounds(self, guild_id):
+    def get_custom_sound(self, guild_id):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Retrieve custom sounds for the given guild from the database
+        # Retrieve a custom sound for the given guild from the database
         cursor.execute("SELECT sound_url FROM custom_sounds WHERE guild_id = ?", (guild_id,))
-        results = cursor.fetchall()
+        result = cursor.fetchone()
 
         conn.close()
 
-        return [result[0] for result in results]
+        if result:
+            return result[0]  # Return the URL of the custom sound
+        else:
+            return None  # Return None if no custom sound is found
 
-    @commands.command(name='dlsound', aliases=['dls'])
+    def save_custom_sound(self, guild_id, sound_name, sound_url):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        # Save the custom sound to the database
+        cursor.execute("INSERT INTO custom_sounds (guild_id, sound_name, sound_url) VALUES (?, ?, ?)",
+                       (guild_id, sound_name, sound_url))
+
+        conn.commit()
+        conn.close()
+
+    @nextcord.slash_command(name='dls', description="Downloads the sound fx to the database.")
     async def download_sound_command(self, ctx, sound_url, sound_name):
         guild_id = ctx.guild.id
 
         """
-        Downloads sound effects to the database. 
-        Usage : >>dls <yt_link> <name_of_the_sound> 
-        
+        Downloads sound effects to the database.
+        Usage : >>dls <yt_link> <name_of_the_sound>
+
         """
         # Download the sound from YouTube
         youtube_video = YouTube(sound_url)
@@ -232,7 +252,7 @@ class SoundCog(commands.Cog):
         sound_file = os.path.join("cogs", "RandomJoiner", "Sussy_FX", sound_name)
 
         # Save the custom sound to the database
-        self.save_custom_sound(guild_id, sound_name[:-4], sound_file)  # Removing '.mp3' extension for database
+        self.save_custom_sound(guild_id, sound_name[:-4], sound_file)  # Removing '.mp3' extension for the database
 
         embed = nextcord.Embed(title='Custom Sound Added',
                                description=f'Custom sound "{sound_name[:-4]}" added successfully.',
@@ -241,18 +261,7 @@ class SoundCog(commands.Cog):
         embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)
         await ctx.send(embed=embed)
 
-    def save_custom_sound(self, guild_id, sound_name, sound_url):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        # Save the custom sound to the database
-        cursor.execute("INSERT INTO custom_sounds (guild_id, sound_name, sound_url) VALUES (?, ?, ?)",
-                       (guild_id, sound_name, sound_url))
-
-        conn.commit()
-        conn.close()
-
-    @commands.command(name='enable_sound', aliases=['es'])
+    @nextcord.slash_command(name='es', description="Enables Sound FX!")
     async def enable_sound_command(self, ctx):
         """
         Enables random sound effects throughout the entire server. Usage: >>enable_sound or >>es
@@ -269,7 +278,7 @@ class SoundCog(commands.Cog):
             embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)  # Set the author
             await ctx.send(embed=embed)
 
-    @commands.command(name='disable_sound', aliases=['ds'])
+    @nextcord.slash_command(name='ds', description="Disables Sound FX!")
     async def disable_sound_command(self, ctx):
         """
         Disables random sound effects throughout the entire server. Usage: >>disable_sound or >>ds
@@ -286,7 +295,7 @@ class SoundCog(commands.Cog):
             embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)  # Set the author
             await ctx.send(embed=embed)
 
-    @commands.command(name="disconnect", aliases=["dc", "fuckoff"])
+    @nextcord.slash_command(name="dc", description="Disconnects from the VC!")
     async def disconnect(self, ctx):
 
         """

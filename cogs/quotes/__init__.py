@@ -174,7 +174,8 @@ class QuotesCog(commands.Cog):
                                        color=nextcord.Color.blue())
                 await quotes_channel.send(embed=embed)
 
-    @commands.command(name='setthreshold', aliases=['st'])
+    @nextcord.slash_command(name='setthreshold', description="""Set the threshold for creating the "quotes" channel.
+        Example: !setthreshold 5""")
     async def set_threshold(self, ctx, threshold: int):
         """
         Set the threshold for creating the "quotes" channel.
@@ -183,7 +184,7 @@ class QuotesCog(commands.Cog):
         self.create_channel_threshold = max(threshold, 1)
         await ctx.send(f'Threshold set to {self.create_channel_threshold} reactions for creating the "quotes" channel.')
 
-    @commands.command(name='quotescanall')
+    @nextcord.slash_command(name='quotescanall', description="""Scan all messages in all channels and save quotes to the log.""")
     async def quotes_scan_all(self, ctx):
         """
         Scan all messages in all channels and save quotes to the log.

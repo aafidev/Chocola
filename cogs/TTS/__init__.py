@@ -4,11 +4,9 @@ import gtts
 import nextcord
 from nextcord.ext import commands
 
-client = commands.Bot(command_prefix='>>')
-client.remove_command('help')
-
 intents = nextcord.Intents.default()
 intents.message_content = True
+
 class TTS(commands.Cog):
     def __init__(self, client):
         self.client = client
@@ -17,76 +15,71 @@ class TTS(commands.Cog):
         self.accent = 'us'
 
     # tts command for the bot
-    @commands.command()
-    async def tts(self, ctx, *, message):
-        if not ctx.author.voice:
-            embed = nextcord.Embed(title='Error', description='Please join a voice channel first.',
-                                   color=nextcord.Color.red())
-            await ctx.send(embed=embed)
+    @nextcord.slash_command(name='tts', description='Converts text to speech and plays it in the voice channel.')
+    async def tts(self, ctx, message: str):
+        if not ctx.user.voice:
+            await ctx.send('Please join a voice channel first.')
             return
+
+        guild = ctx.guild
+        voice_channel = ctx.user.voice.channel
+
         if not self.voice_client or not self.voice_client.is_connected():
-            self.voice_client = await ctx.author.voice.channel.connect()
+            self.voice_client = await voice_channel.connect()
 
         tts = gtts.gTTS(message, lang=self.language, tld=self.accent)
         tts.save('tts.mp3')
 
         source = nextcord.FFmpegPCMAudio('tts.mp3')
-        self.voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else None)
 
-        while self.voice_client.is_playing():
-            await asyncio.sleep(1)
+        if self.voice_client:
+            self.voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else None)
 
-        os.remove('tts.mp3')
+            while self.voice_client.is_playing():
+                await asyncio.sleep(1)
+
+            os.remove('tts.mp3')
 
     # leave command for tts
-
-    @commands.command()
+    @nextcord.slash_command(name='leave', description='Leaves the voice channel.')
     async def leave(self, ctx):
+        if self.voice_client and self.voice_client.is_playing():
+            while self.voice_client.is_playing():
+                await asyncio.sleep(1)
         if self.voice_client:
             await self.voice_client.disconnect()
             self.voice_client = None
 
     # set language command for tts
-
-    @commands.command()
-    async def setlang(self, ctx, lang='en', accent='us'):
+    @nextcord.slash_command(name='setlang', description='Sets the language and accent for text-to-speech.')
+    async def setlang(self, ctx, lang: str = 'en', accent: str = 'us'):
         self.language = lang
         self.accent = accent
-        embed = nextcord.Embed(title='Language Set', description=f'Language set to {lang} with accent {accent}.',
-                               color=nextcord.Color.green())
-        await ctx.send(embed=embed) \
- \
-            # langlist command for TTS
+        await ctx.send(f'Language set to {lang} with accent {accent}.')
 
-    @commands.command()
+    # langlist command for TTS
+    @nextcord.slash_command(name='langlist', description='Shows a list of supported languages and accents.')
     async def langlist(self, ctx):
         embed = nextcord.Embed(title='Language List', description='List of supported languages and accents.',
                                color=nextcord.Color.green())
         embed.add_field(name='Languages', value='en, fr, zh-CN, zh-TW, pt, es', inline=False)
         embed.add_field(name='Accents',
-                        value='us, com.au, co.uk, us, ca, co.in, ie, co.za, ca, fr, com.br, pt, com.mx, es , us',
+                        value='us, com.au, co.uk, us, ca, co.in, ie, co.za, ca, fr, com.br, pt, com.mx, es, us',
                         inline=False)
         embed.set_image(url="https://media.tenor.com/PgoZNWWHUz8AAAAd/nekopara-ova.gif")
         await ctx.send(embed=embed)
 
-    @tts.error
-    async def tts_error(self, ctx, error):
+    @commands.Cog.listener()
+    async def on_slash_command_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
-            embed = nextcord.Embed(title='Error', description='Please provide a message to say.',
-                                   color=nextcord.Color.red())
-            await ctx.send(embed=embed)
+            await ctx.send('Please provide the required arguments.')
 
-    @leave.error
-    async def leave_error(self, ctx, error):
-        if isinstance(error, commands.CommandInvokeError):
-            embed = nextcord.Embed(title='Error', description='The bot is not connected to a voice channel.',
-                                   color=nextcord.Color.red())
-            await ctx.send(embed=embed)
+        elif isinstance(error, commands.CommandInvokeError):
+            await ctx.send('An error occurred while executing the command.')
 
-    def cog_unload(self):
+    async def cog_unload(self):
         if self.voice_client:
-            nextcord.ClientUser().loop.create_task(self.voice_client.disconnect())
-
+            await self.voice_client.disconnect()
 
 def setup(client):
     client.add_cog(TTS(client))

@@ -2,6 +2,16 @@ import os
 import nextcord
 from nextcord.ext import commands
 import config
+import json
+
+def get_all_guild_ids(bot):
+    # Retrieve a list of all guild IDs the bot is a member of
+    return [guild.id for guild in bot.guilds]
+
+def save_guild_ids_to_json(guild_ids):
+    # Save the list of guild IDs to a JSON file
+    with open("guilds.json", "w") as json_file:
+        json.dump(guild_ids, json_file)
 
 def main():
     intents = nextcord.Intents.default()
@@ -28,6 +38,10 @@ def main():
         assert bot.user is not None
         print("----------------------------------------")
         print(f"{bot.user.name} has connected to Discord!")
+
+        # Get all guild IDs and save them to a JSON file
+        guild_ids = get_all_guild_ids(bot)
+        save_guild_ids_to_json(guild_ids)
 
     bot.run(config.DISCORD_TOKEN)
 
