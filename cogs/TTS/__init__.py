@@ -7,6 +7,7 @@ from nextcord.ext import commands
 intents = nextcord.Intents.default()
 intents.message_content = True
 
+
 class TTS(commands.Cog):
     def __init__(self, client):
         self.client = client
@@ -15,14 +16,15 @@ class TTS(commands.Cog):
         self.accent = 'us'
 
     # tts command for the bot
-    @nextcord.slash_command(name='tts', description='Converts text to speech and plays it in the voice channel.')
+    # tts command for the bot
+    @commands.command(name='tts', description='Converts text to speech and plays it in the voice channel.')
     async def tts(self, ctx, message: str):
-        if not ctx.user.voice:
+        if not ctx.author.voice:  # Use ctx.author instead of ctx.user
             await ctx.send('Please join a voice channel first.')
             return
 
         guild = ctx.guild
-        voice_channel = ctx.user.voice.channel
+        voice_channel = ctx.author.voice.channel  # Use ctx.author instead of ctx.user
 
         if not self.voice_client or not self.voice_client.is_connected():
             self.voice_client = await voice_channel.connect()
@@ -34,16 +36,15 @@ class TTS(commands.Cog):
 
         if self.voice_client:
             self.voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else None)
-
             while self.voice_client.is_playing():
-                await asyncio.sleep(1)
+                await asyncio.sleep(1)  # Use asyncio.sleep with await
 
             os.remove('tts.mp3')
 
     # leave command for tts
-    @nextcord.slash_command(name='leave', description='Leaves the voice channel.')
+    @commands.command(name='leave', description='Leaves the voice channel.')
     async def leave(self, ctx):
-        if self.voice_client and self.voice_client.is_playing():
+        if self.voice_client and self.voice_client.is_connected():
             while self.voice_client.is_playing():
                 await asyncio.sleep(1)
         if self.voice_client:
@@ -51,14 +52,14 @@ class TTS(commands.Cog):
             self.voice_client = None
 
     # set language command for tts
-    @nextcord.slash_command(name='setlang', description='Sets the language and accent for text-to-speech.')
+    @commands.command(name='setlang', description='Sets the language and accent for text-to-speech.')
     async def setlang(self, ctx, lang: str = 'en', accent: str = 'us'):
         self.language = lang
         self.accent = accent
         await ctx.send(f'Language set to {lang} with accent {accent}.')
 
     # langlist command for TTS
-    @nextcord.slash_command(name='langlist', description='Shows a list of supported languages and accents.')
+    @commands.command(name='langlist', description='Shows a list of supported languages and accents.')
     async def langlist(self, ctx):
         embed = nextcord.Embed(title='Language List', description='List of supported languages and accents.',
                                color=nextcord.Color.green())
@@ -78,8 +79,9 @@ class TTS(commands.Cog):
             await ctx.send('An error occurred while executing the command.')
 
     async def cog_unload(self):
-        if self.voice_client:
+        if self.voice_client and self.voice_client.is_connected():
             await self.voice_client.disconnect()
+
 
 def setup(client):
     client.add_cog(TTS(client))

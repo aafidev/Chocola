@@ -20,7 +20,7 @@ class YTDL(commands.Cog):
     async def on_slash_command_error(self, ctx, error):
         await ctx.send(f"An error occurred: {error}")
 
-    @nextcord.slash_command(
+    @commands.command(
         name="ytdl",
         description="Download audio from YouTube and send as an MP3 file."
     )
