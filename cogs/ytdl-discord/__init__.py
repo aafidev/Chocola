@@ -1,15 +1,43 @@
+import functools
 import nextcord
 from nextcord.ext import commands
 from pytube import YouTube
 from pydub import AudioSegment
 import os
 import time
+import asyncio
 
 # The following lines should be at the end of your script
 intents = nextcord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix=">>", intents=intents)
+
+
+def global_queue(fn):
+    # Coroutine to wait for
+    fu = asyncio.Future()
+    fu.set_result(None)
+    global_queue.wait_for = fu
+
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        # Associated with self
+        fu = asyncio.Future()
+
+        # Replace global
+        wait = global_queue.wait_for
+        global_queue.wait_for = fu
+
+        await wait
+
+        co = fn(*args, **kwargs)
+        r = await co
+
+        fu.set_result(None)
+        return r
+
+    return wrapper
 
 
 class YTDL(commands.Cog):
@@ -21,9 +49,9 @@ class YTDL(commands.Cog):
         await ctx.send(f"An error occurred: {error}")
 
     @commands.command(
-        name="ytdl",
-        description="Download audio from YouTube and send as an MP3 file."
+        name="ytdl", description="Download audio from YouTube and send as an MP3 file."
     )
+    @global_queue
     async def ytdl_command(self, ctx: commands.Context, query: str):
         # Ensure the "downloads" directory exists
         downloads_dir = "downloads"
@@ -96,7 +124,6 @@ class YTDL(commands.Cog):
                 os.remove(mp4_file_path)
             if 'mp3_file_path' in locals() and os.path.exists(mp3_file_path):
                 os.remove(mp3_file_path)
-
 
     @ytdl_command.error
     async def ytdl_error(self, ctx, error):
