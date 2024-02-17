@@ -12,7 +12,10 @@ class TwitterFixCog(commands.Cog):
         if message.author.bot:
             return  # Ignore messages from other bots
 
-        tweet_url_match = re.search(r'https?://(?:twitter|x)\.com/.+?/status/\d+', message.content)
+        tweet_url_match = re.search(
+            r"https?://(?:www\.)?twitter\.com/([a-zA-Z0-9_]+)/status/(\d+)",
+            message.content,
+        )
 
         if tweet_url_match:
             tweet_url = tweet_url_match.group(0)
