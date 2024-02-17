@@ -4,8 +4,8 @@ from nextcord.ext import commands
 from pytube import YouTube
 from pydub import AudioSegment
 import os
-import time
 import asyncio
+import re
 
 # The following lines should be at the end of your script
 intents = nextcord.Intents.default()
@@ -104,15 +104,40 @@ class YTDL(commands.Cog):
 
             # Download the audio stream as MP4
             mp4_file_path = os.path.join(downloads_dir, f"{video.title}.mp4")
-            stream.download(output_path=downloads_dir)
+            stream.download(
+                output_path=downloads_dir,
+                filename_prefix="",
+                filename="{sanitized_title}.mp4",
+            )
 
-            # Convert MP4 to MP3 using pydub
-            mp3_file_path = os.path.join(downloads_dir, f"{video.title}.mp3")
-            audio = AudioSegment.from_file(mp4_file_path, format="mp4")
-            audio.export(mp3_file_path, format="mp3")
+            # Handle special characters in the video title
+            sanitized_title = re.sub(r"[^\w\-_\. ]", "_", video.title)
+            sanitized_title = re.sub(
+                r" +", "_", sanitized_title
+            )  # Replace multiple spaces with a single space
+            sanitized_title = sanitized_title.strip()  # Remove leading and trailing spaces
+
+            # Download the audio stream as MP4
+            stream.download(
+                output_path=downloads_dir,
+                filename_prefix="",
+                filename=f"{sanitized_title}.mp4",
+            )
+
+            # Construct file paths with sanitized title
+            mp4_file_path = os.path.join(downloads_dir, f"{sanitized_title}.mp4")
+            mp3_file_path = os.path.join(downloads_dir, f"{sanitized_title}.mp3")
+
+            # Handle Windows-specific file path issues
+            mp4_file_path = os.path.abspath(mp4_file_path)
+            mp3_file_path = os.path.abspath(mp3_file_path)
 
             # Send the MP3 file to the text channel
-            await ctx.send(file=nextcord.File(mp3_file_path))
+            file = nextcord.File(mp4_file_path)
+            file.close()
+
+            # Send the MP3 file to the text channel
+            await ctx.send(file=nextcord.File(mp4_file_path))
 
             # Send an embed with information about the YouTube video
             embed = nextcord.Embed(
