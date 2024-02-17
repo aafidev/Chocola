@@ -16,7 +16,6 @@ class TTS(commands.Cog):
         self.accent = 'us'
 
     # tts command for the bot
-    # tts command for the bot
     @commands.command(name='tts', description='Converts text to speech and plays it in the voice channel.')
     async def tts(self, ctx, message: str):
         if not ctx.author.voice:  # Use ctx.author instead of ctx.user
