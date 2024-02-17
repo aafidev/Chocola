@@ -60,7 +60,9 @@ class QuotesCog(commands.Cog):
     async def is_text_embed(self, message):
         # Check if the message has a Tenor link or any link that displays an image
         if any(
-            re.search(r"(https?://\S+tenor.com/\S+)", message.content)
+            re.search(
+                r"https?://(?:www\.)?tenor\.com/view/[a-zA-Z0-9\-]+", message.content
+            )
             for message in message.attachments
         ):
             return False
