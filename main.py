@@ -4,14 +4,17 @@ from nextcord.ext import commands
 import config
 import json
 
+
 def get_all_guild_ids(bot):
     # Retrieve a list of all guild IDs the bot is a member of
     return [guild.id for guild in bot.guilds]
+
 
 def save_guild_ids_to_json(guild_ids):
     # Save the list of guild IDs to a JSON file
     with open("guilds.json", "w") as json_file:
         json.dump(guild_ids, json_file)
+
 
 def main():
     intents = nextcord.Intents.default()
@@ -30,7 +33,7 @@ def main():
 
     # Get the modules of all cogs whose directory structure is ./cogs/<module_name>
     for folder in os.listdir("cogs"):
-        if not folder.startswith('__'):  # Exclude directories starting with '__'
+        if not folder.startswith("__"):  # Exclude directories starting with '__'
             bot.load_extension(f"cogs.{folder}")
 
     @bot.listen()
@@ -43,7 +46,17 @@ def main():
         guild_ids = get_all_guild_ids(bot)
         save_guild_ids_to_json(guild_ids)
 
-    bot.run(config.DISCORD_TOKEN)
+    if config.DISCORD_TOKEN:
+        bot.run(config.DISCORD_TOKEN)
+    elif not config.mode.lower() in ["dev", "development"]:
+        raise Exception(
+            "ERROR - DISCORD_TOKEN environment variable not found",
+        )
+    else:
+        print(
+            "WARN - DISCORD_TOKEN not found in .env file",
+        )
+
 
 if __name__ == "__main__":
     main()
