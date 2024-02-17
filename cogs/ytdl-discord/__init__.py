@@ -113,8 +113,9 @@ class YTDL(commands.Cog):
     async def ytdl_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
             await ctx.send("Please provide a valid YouTube URL or search query.")
-        else:
-            await ctx.send(f"An error occurred: {error}")
+            return
+
+        await ctx.send(f"An error occurred: {error}")
 
 
 def setup(bot):
