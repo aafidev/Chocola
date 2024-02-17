@@ -1,98 +1,162 @@
-import asyncio
-import os
-import gtts
+import functools
 import nextcord
 from nextcord.ext import commands
+from pytube import YouTube
+import os
+import asyncio
+import re
 
+# The following lines should be at the end of your script
 intents = nextcord.Intents.default()
 intents.message_content = True
 
+bot = commands.Bot(command_prefix=">>", intents=intents)
 
-class TTS(commands.Cog):
-    def __init__(self, client):
-        self.client = client
-        self.voice_client = None
-        self.language = 'en'
-        self.accent = 'us'
 
-    # tts command for the bot
-    # tts command for the bot
-    @commands.command(name='tts', description='Converts text to speech and plays it in the voice channel.')
-    async def tts(self, ctx, *, message: str):
-        if not ctx.author.voice:
-            await ctx.send('Please join a voice channel first.')
-            return
+def global_queue(fn):
+    # Coroutine to wait for
+    fu = asyncio.Future()
+    fu.set_result(None)
+    global_queue.wait_for = fu
 
-        guild = ctx.guild
-        voice_channel = ctx.author.voice.channel
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        # Associated with self
+        fu = asyncio.Future()
 
-        if not self.voice_client or not self.voice_client.is_connected():
-            self.voice_client = await voice_channel.connect()
+        # Replace global
+        wait = global_queue.wait_for
+        global_queue.wait_for = fu
 
-        tts = gtts.gTTS(message, lang=self.language, tld=self.accent)
-        tts.save('tts.mp3')
+        await wait
 
-        source = nextcord.FFmpegPCMAudio('tts.mp3')
+        co = fn(*args, **kwargs)
+        r = await co
 
-        if self.voice_client:
-            def after_play(error):
-                if error:
-                    print('Player error: %s' % error)
-                os.remove('tts.mp3')
+        fu.set_result(None)
+        return r
 
-                # Add a delay of 5 minutes (300 seconds) before disconnecting
-                asyncio.run_coroutine_threadsafe(self.disconnect_after_delay(), self.client.loop)
+    return wrapper
 
-            self.voice_client.play(source, after=after_play)
 
-    async def disconnect_after_delay(self):
-        await asyncio.sleep(300)  # Adjust the duration as needed
-        if self.voice_client and self.voice_client.is_connected():
-            await self.voice_client.disconnect()
-            self.voice_client = None
-
-    # leave command for tts
-    @commands.command(name='leave', description='Leaves the voice channel.')
-    async def leave(self, ctx):
-        if self.voice_client and self.voice_client.is_connected():
-            while self.voice_client.is_playing():
-                await asyncio.sleep(1)
-        if self.voice_client:
-            await self.voice_client.disconnect()
-            self.voice_client = None
-
-    # set language command for tts
-    @commands.command(name='setlang', description='Sets the language and accent for text-to-speech.')
-    async def setlang(self, ctx, lang: str = 'en', accent: str = 'us'):
-        self.language = lang
-        self.accent = accent
-        await ctx.send(f'Language set to {lang} with accent {accent}.')
-
-    # langlist command for TTS
-    @commands.command(name='langlist', description='Shows a list of supported languages and accents.')
-    async def langlist(self, ctx):
-        embed = nextcord.Embed(title='Language List', description='List of supported languages and accents.',
-                               color=nextcord.Color.green())
-        embed.add_field(name='Languages', value='en, fr, zh-CN, zh-TW, pt, es', inline=False)
-        embed.add_field(name='Accents',
-                        value='us, com.au, co.uk, us, ca, co.in, ie, co.za, ca, fr, com.br, pt, com.mx, es, us',
-                        inline=False)
-        embed.set_image(url="https://media.tenor.com/PgoZNWWHUz8AAAAd/nekopara-ova.gif")
-        await ctx.send(embed=embed)
+class YTDL(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
 
     @commands.Cog.listener()
     async def on_slash_command_error(self, ctx, error):
+        await ctx.send(f"An error occurred: {error}")
+
+    @commands.command(
+        name="ytdl", description="Download audio from YouTube and send as an MP3 file."
+    )
+    @global_queue
+    async def ytdl_command(self, ctx: commands.Context, query: str):
+        # Ensure the "downloads" directory exists
+        downloads_dir = "downloads"
+        os.makedirs(downloads_dir, exist_ok=True)
+
+        try:
+            # Check if the input is a URL or a search query
+            if "youtube.com" in query or "youtu.be" in query:
+                # Direct URL provided
+                video = YouTube(query)
+            else:
+                # Search query provided
+                videos = YouTube().search(query)
+                if not videos:
+                    await ctx.send("No videos found for the provided search query.")
+                    return
+
+                # Present a list of search results to the user
+                search_results = "\n".join([f"{i + 1}. {video.title}" for i, video in enumerate(videos)])
+                await ctx.send(f"Search Results:\n{search_results}\n\nPlease choose a number from the list.")
+
+                def check(message):
+                    return message.author == ctx.author and message.channel == ctx.channel
+
+                # Wait for user input to select a video
+                response = await self.bot.wait_for("message", check=check, timeout=30)
+                choice = int(response.content) - 1
+
+                if not 0 <= choice < len(videos):
+                    await ctx.send("Invalid choice. Please choose a number from the list.")
+                    return
+
+                video = videos[choice]
+
+            # Check if the audio stream is available
+            stream = video.streams.filter(only_audio=True).first()
+            if stream is None:
+                await ctx.send("No audio stream available for the selected YouTube video.")
+                return
+
+            # Download the audio stream as MP4
+            mp4_file_path = os.path.join(downloads_dir, f"{video.title}.mp4")
+            stream.download(
+                output_path=downloads_dir,
+                filename_prefix="",
+                filename="{sanitized_title}.mp4",
+            )
+
+            # Handle special characters in the video title
+            sanitized_title = re.sub(r"[^\w\-_\. ]", "_", video.title)
+            sanitized_title = re.sub(
+                r" +", "_", sanitized_title
+            )  # Replace multiple spaces with a single space
+            sanitized_title = sanitized_title.strip()  # Remove leading and trailing spaces
+
+            # Download the audio stream as MP4
+            stream.download(
+                output_path=downloads_dir,
+                filename_prefix="",
+                filename=f"{sanitized_title}.mp4",
+            )
+
+            # Construct file paths with sanitized title
+            mp4_file_path = os.path.join(downloads_dir, f"{sanitized_title}.mp4")
+            mp3_file_path = os.path.join(downloads_dir, f"{sanitized_title}.mp3")
+
+            # Handle Windows-specific file path issues
+            mp4_file_path = os.path.abspath(mp4_file_path)
+            mp3_file_path = os.path.abspath(mp3_file_path)
+
+            # Send the MP3 file to the text channel
+            file = nextcord.File(mp4_file_path)
+            file.close()
+
+            # Send the MP3 file to the text channel
+            await ctx.send(file=nextcord.File(mp4_file_path))
+
+            # Send an embed with information about the YouTube video
+            embed = nextcord.Embed(
+                title=video.title,
+                url=video.watch_url,
+                description=f"Uploaded by {video.author}\nDuration: {video.length} seconds",
+                color=0x00ff00  # You can customize the color as needed
+            )
+            embed.set_thumbnail(url=video.thumbnail_url)
+            await ctx.send(embed=embed)
+
+        except Exception as e:
+            print(f"Error: {e}")
+            await ctx.send(f"An error occurred: {e}")
+
+        finally:
+            # Clean up the temporary files if they were created
+            if 'mp4_file_path' in locals() and os.path.exists(mp4_file_path):
+                os.remove(mp4_file_path)
+            if 'mp3_file_path' in locals() and os.path.exists(mp3_file_path):
+                os.remove(mp3_file_path)
+
+    @ytdl_command.error
+    async def ytdl_error(self, ctx, error):
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send('Please provide the required arguments.')
-
-        elif isinstance(error, commands.CommandInvokeError):
-            await ctx.send('An error occurred while executing the command.')
-
-    async def cog_unload(self):
-        if self.voice_client and self.voice_client.is_connected():
-            await self.voice_client.disconnect()
+            await ctx.send("Please provide a valid YouTube URL or search query.")
+        else:
+            await ctx.send(f"An error occurred: {error}")
 
 
-def setup(client):
-    client.add_cog(TTS(client))
-    print('TTS Cog Loaded Successfully!')
+def setup(bot):
+    bot.add_cog(YTDL(bot))
+    print("Loaded ytdl cog")

@@ -5,6 +5,7 @@ import random
 import os
 import json
 
+
 class Someone(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -21,12 +22,14 @@ class Someone(commands.Cog):
         # Connect to the database or create it if it doesn't exist
         self.db_connection = sqlite3.connect(self.db_path)
         cursor = self.db_connection.cursor()
-        cursor.execute('''
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS members (
                 id INTEGER PRIMARY KEY,
                 member_id INTEGER UNIQUE
             )
-        ''')
+        """
+        )
         self.db_connection.commit()
 
     def get_all_member_ids(self):
@@ -54,9 +57,12 @@ class Someone(commands.Cog):
         cursor = self.db_connection.cursor()
 
         for member_id in member_ids:
-            cursor.execute('''
+            cursor.execute(
+                """
                 INSERT OR IGNORE INTO members (member_id) VALUES (?)
-            ''', (member_id,))
+            """,
+                (member_id,),
+            )
 
         self.db_connection.commit()
         return member_ids
@@ -75,9 +81,12 @@ class Someone(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member):
         cursor = self.db_connection.cursor()
-        cursor.execute('''
+        cursor.execute(
+            """
             INSERT OR IGNORE INTO members (member_id) VALUES (?)
-        ''', (member.id,))
+        """,
+            (member.id,),
+        )
         self.db_connection.commit()
 
     @nextcord.slash_command(name="someone")

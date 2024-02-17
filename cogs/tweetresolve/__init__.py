@@ -2,6 +2,7 @@ import re
 from nextcord.ext import commands
 import asyncio
 
+
 class TwitterFixCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -12,11 +13,16 @@ class TwitterFixCog(commands.Cog):
         if message.author.bot:
             return  # Ignore messages from other bots
 
-        tweet_url_match = re.search(r'https?://(?:twitter|x)\.com/.+?/status/\d+', message.content)
+        tweet_url_match = re.search(
+            r"https?://(?:www\.)?twitter\.com/([a-zA-Z0-9_]+)/status/(\d+)",
+            message.content,
+        )
 
         if tweet_url_match:
             tweet_url = tweet_url_match.group(0)
-            fixed_url = tweet_url.replace('twitter.com', 'fxtwitter.com').replace('x.com', 'fxtwitter.com')
+            fixed_url = tweet_url.replace("twitter.com", "fxtwitter.com").replace(
+                "x.com", "fxtwitter.com"
+            )
 
             # Send the fixed link
             sent_message = await message.channel.send(fixed_url)
@@ -30,6 +36,7 @@ class TwitterFixCog(commands.Cog):
             await original_message.delete()
         except Exception as e:
             print(f"Error deleting original message: {e}")
+
 
 def setup(bot):
     bot.add_cog(TwitterFixCog(bot))
