@@ -11,7 +11,9 @@ import sqlite3
 class SoundCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.enabled_servers = self.load_enabled_servers()  # Load enabled servers from file
+        self.enabled_servers = (
+            self.load_enabled_servers()
+        )  # Load enabled servers from file
         self.voice_clients = {}  # Store voice clients per guild
         self.played_sounds = {}  # Dictionary to store played sounds per guild
         self.check_vc.start()
@@ -52,13 +54,15 @@ class SoundCog(commands.Cog):
         cursor = conn.cursor()
 
         # Create a table for custom sounds
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS custom_sounds (
                 guild_id INTEGER,
                 sound_name TEXT,
                 sound_url TEXT
             )
-        """)
+        """
+        )
 
         conn.commit()
         conn.close()
@@ -90,9 +94,14 @@ class SoundCog(commands.Cog):
                 for channel in guild.voice_channels:
                     if channel.members:
                         print(f"Checking voice channel {channel.name} in {guild.name}")
-                        if guild.id not in self.voice_clients or not self.voice_clients[guild.id].is_connected():
+                        if (
+                            guild.id not in self.voice_clients
+                            or not self.voice_clients[guild.id].is_connected()
+                        ):
                             # Connect to voice channel only if not already connected or disconnected
-                            print(f"Connecting to voice channel {channel.name} in {guild.name}")
+                            print(
+                                f"Connecting to voice channel {channel.name} in {guild.name}"
+                            )
                             try:
                                 voice_client = await channel.connect()
                                 self.voice_clients[guild.id] = voice_client
@@ -115,20 +124,28 @@ class SoundCog(commands.Cog):
 
         if custom_sounds_dict:
             # Select a random custom sound file from all guilds
-            all_custom_sounds = [sound for guild_sounds in custom_sounds_dict.values() for sound in guild_sounds]
+            all_custom_sounds = [
+                sound
+                for guild_sounds in custom_sounds_dict.values()
+                for sound in guild_sounds
+            ]
             custom_sound = random.choice(all_custom_sounds)
             sound_file = custom_sound
         else:
             # Use predefined sound effects if no custom sound is found
-            sound_directory = 'cogs/RandomJoiner/Sussy_FX'
-            sound_files = [file for file in os.listdir(sound_directory) if file.endswith('.mp3')]
+            sound_directory = "cogs/RandomJoiner/Sussy_FX"
+            sound_files = [
+                file for file in os.listdir(sound_directory) if file.endswith(".mp3")
+            ]
 
             if not sound_files:
                 print(f"No .mp3 files found in {sound_directory}")
                 return
 
             # Find a new sound that hasn't been played yet
-            available_sounds = set(sound_files) - self.played_sounds.get(guild_id, set())
+            available_sounds = set(sound_files) - self.played_sounds.get(
+                guild_id, set()
+            )
 
             if not available_sounds:
                 print(f"All sounds have been played. Resetting the played sounds list.")
@@ -136,7 +153,9 @@ class SoundCog(commands.Cog):
                 available_sounds = set(sound_files)
 
             # Select a random sound file
-            sound_file = os.path.join(sound_directory, random.choice(list(available_sounds)))
+            sound_file = os.path.join(
+                sound_directory, random.choice(list(available_sounds))
+            )
 
             # Add the selected sound to the list of played sounds
             self.played_sounds[guild_id].add(os.path.basename(sound_file))
@@ -146,7 +165,9 @@ class SoundCog(commands.Cog):
 
         try:
             # Play the sound
-            audio_source = nextcord.FFmpegPCMAudio(executable="ffmpeg", source=sound_file)
+            audio_source = nextcord.FFmpegPCMAudio(
+                executable="ffmpeg", source=sound_file
+            )
             event = asyncio.Event()
 
             def after_play(error):
@@ -183,7 +204,7 @@ class SoundCog(commands.Cog):
 
         # Send live countdown messages
         for i in range(countdown_duration, 0, -1):
-            print(f"\rRejoining in {i} seconds...", end='', flush=True)
+            print(f"\rRejoining in {i} seconds...", end="", flush=True)
             await asyncio.sleep(1)
 
         print("\rRejoining...")
@@ -207,7 +228,9 @@ class SoundCog(commands.Cog):
         cursor = conn.cursor()
 
         # Retrieve a custom sound for the given guild from the database
-        cursor.execute("SELECT sound_url FROM custom_sounds WHERE guild_id = ?", (guild_id,))
+        cursor.execute(
+            "SELECT sound_url FROM custom_sounds WHERE guild_id = ?", (guild_id,)
+        )
         result = cursor.fetchone()
 
         conn.close()
@@ -222,13 +245,17 @@ class SoundCog(commands.Cog):
         cursor = conn.cursor()
 
         # Save the custom sound to the database
-        cursor.execute("INSERT INTO custom_sounds (guild_id, sound_name, sound_url) VALUES (?, ?, ?)",
-                       (guild_id, sound_name, sound_url))
+        cursor.execute(
+            "INSERT INTO custom_sounds (guild_id, sound_name, sound_url) VALUES (?, ?, ?)",
+            (guild_id, sound_name, sound_url),
+        )
 
         conn.commit()
         conn.close()
 
-    @nextcord.slash_command(name='dls', description="Downloads the sound fx to the database.")
+    @nextcord.slash_command(
+        name="dls", description="Downloads the sound fx to the database."
+    )
     async def download_sound_command(self, ctx, sound_url, sound_name):
         guild_id = ctx.guild.id
 
@@ -242,26 +269,33 @@ class SoundCog(commands.Cog):
         audio_stream = youtube_video.streams.filter(only_audio=True).first()
 
         # Ensure that the file extension is 'mp3'
-        if not sound_name.lower().endswith('.mp3'):
-            sound_name += '.mp3'
+        if not sound_name.lower().endswith(".mp3"):
+            sound_name += ".mp3"
 
         # Save the audio file with the provided name and correct file extension
-        audio_stream.download(output_path=os.path.join("cogs", "RandomJoiner", "Sussy_FX"), filename=sound_name)
+        audio_stream.download(
+            output_path=os.path.join("cogs", "RandomJoiner", "Sussy_FX"),
+            filename=sound_name,
+        )
 
         # Construct the full path to the saved audio file
         sound_file = os.path.join("cogs", "RandomJoiner", "Sussy_FX", sound_name)
 
         # Save the custom sound to the database
-        self.save_custom_sound(guild_id, sound_name[:-4], sound_file)  # Removing '.mp3' extension for the database
+        self.save_custom_sound(
+            guild_id, sound_name[:-4], sound_file
+        )  # Removing '.mp3' extension for the database
 
-        embed = nextcord.Embed(title='Custom Sound Added',
-                               description=f'Custom sound "{sound_name[:-4]}" added successfully.',
-                               color=nextcord.Color.green())
+        embed = nextcord.Embed(
+            title="Custom Sound Added",
+            description=f'Custom sound "{sound_name[:-4]}" added successfully.',
+            color=nextcord.Color.green(),
+        )
         embed.set_thumbnail(url=youtube_video.thumbnail_url)
         embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)
         await ctx.send(embed=embed)
 
-    @nextcord.slash_command(name='es', description="Enables Sound FX!")
+    @nextcord.slash_command(name="es", description="Enables Sound FX!")
     async def enable_sound_command(self, ctx):
         """
         Enables random sound effects throughout the entire server. Usage: >>enable_sound or >>es
@@ -270,15 +304,23 @@ class SoundCog(commands.Cog):
         if ctx.guild.id not in self.enabled_servers:
             self.enabled_servers.add(ctx.guild.id)
             self.save_enabled_servers()  # Save enabled servers to file
-            embed = nextcord.Embed(title='Sound effects enabled', color=nextcord.Color.green())  # Create an embed
-            embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)  # Set the author
+            embed = nextcord.Embed(
+                title="Sound effects enabled", color=nextcord.Color.green()
+            )  # Create an embed
+            embed.set_author(
+                name=ctx.author.name, icon_url=ctx.author.avatar.url
+            )  # Set the author
             await ctx.send(embed=embed)
         else:
-            embed = nextcord.Embed(title='Sound effects already enabled', color=nextcord.Color.red())
-            embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)  # Set the author
+            embed = nextcord.Embed(
+                title="Sound effects already enabled", color=nextcord.Color.red()
+            )
+            embed.set_author(
+                name=ctx.author.name, icon_url=ctx.author.avatar.url
+            )  # Set the author
             await ctx.send(embed=embed)
 
-    @nextcord.slash_command(name='ds', description="Disables Sound FX!")
+    @nextcord.slash_command(name="ds", description="Disables Sound FX!")
     async def disable_sound_command(self, ctx):
         """
         Disables random sound effects throughout the entire server. Usage: >>disable_sound or >>ds
@@ -287,29 +329,43 @@ class SoundCog(commands.Cog):
         if ctx.guild.id in self.enabled_servers:
             self.enabled_servers.remove(ctx.guild.id)
             self.save_enabled_servers()  # Save enabled servers to file
-            embed = nextcord.Embed(title='Sound effects disabled for this server', color=nextcord.Color.red())
-            embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)  # Set the author
+            embed = nextcord.Embed(
+                title="Sound effects disabled for this server",
+                color=nextcord.Color.red(),
+            )
+            embed.set_author(
+                name=ctx.author.name, icon_url=ctx.author.avatar.url
+            )  # Set the author
             await ctx.send(embed=embed)
         else:
-            embed = nextcord.Embed(title='Sound effects are already disabled', color=nextcord.Color.red())
-            embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)  # Set the author
+            embed = nextcord.Embed(
+                title="Sound effects are already disabled", color=nextcord.Color.red()
+            )
+            embed.set_author(
+                name=ctx.author.name, icon_url=ctx.author.avatar.url
+            )  # Set the author
             await ctx.send(embed=embed)
 
     @nextcord.slash_command(name="dc", description="Disconnects from the VC!")
     async def disconnect(self, ctx):
-
         """
         Disconnects the bot from the voice channel: >>dc or >>disconnect
         """
         if ctx.guild.id in self.voice_clients:
             await self.voice_clients[ctx.guild.id].disconnect()
             del self.voice_clients[ctx.guild.id]
-            embed = nextcord.Embed(title="Disconnected", description="Disconnected from voice channel.",
-                                   color=nextcord.Color.green())
+            embed = nextcord.Embed(
+                title="Disconnected",
+                description="Disconnected from voice channel.",
+                color=nextcord.Color.green(),
+            )
             await ctx.send(embed=embed)
         else:
-            embed = nextcord.Embed(title="Error", description="Not connected to a voice channel.",
-                                   color=nextcord.Color.red())
+            embed = nextcord.Embed(
+                title="Error",
+                description="Not connected to a voice channel.",
+                color=nextcord.Color.red(),
+            )
             await ctx.send(embed=embed)
 
 

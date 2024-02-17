@@ -21,8 +21,7 @@ class YTDL(commands.Cog):
         await ctx.send(f"An error occurred: {error}")
 
     @commands.command(
-        name="ytdl",
-        description="Download audio from YouTube and send as an MP3 file."
+        name="ytdl", description="Download audio from YouTube and send as an MP3 file."
     )
     async def ytdl_command(self, ctx: commands.Context, query: str):
         # Ensure the "downloads" directory exists
@@ -42,18 +41,26 @@ class YTDL(commands.Cog):
                     return
 
                 # Present a list of search results to the user
-                search_results = "\n".join([f"{i + 1}. {video.title}" for i, video in enumerate(videos)])
-                await ctx.send(f"Search Results:\n{search_results}\n\nPlease choose a number from the list.")
+                search_results = "\n".join(
+                    [f"{i + 1}. {video.title}" for i, video in enumerate(videos)]
+                )
+                await ctx.send(
+                    f"Search Results:\n{search_results}\n\nPlease choose a number from the list."
+                )
 
                 def check(message):
-                    return message.author == ctx.author and message.channel == ctx.channel
+                    return (
+                        message.author == ctx.author and message.channel == ctx.channel
+                    )
 
                 # Wait for user input to select a video
                 response = await self.bot.wait_for("message", check=check, timeout=30)
                 choice = int(response.content) - 1
 
                 if not 0 <= choice < len(videos):
-                    await ctx.send("Invalid choice. Please choose a number from the list.")
+                    await ctx.send(
+                        "Invalid choice. Please choose a number from the list."
+                    )
                     return
 
                 video = videos[choice]
@@ -61,7 +68,9 @@ class YTDL(commands.Cog):
             # Check if the audio stream is available
             stream = video.streams.filter(only_audio=True).first()
             if stream is None:
-                await ctx.send("No audio stream available for the selected YouTube video.")
+                await ctx.send(
+                    "No audio stream available for the selected YouTube video."
+                )
                 return
 
             # Download the audio stream as MP4
@@ -81,7 +90,7 @@ class YTDL(commands.Cog):
                 title=video.title,
                 url=video.watch_url,
                 description=f"Uploaded by {video.author}\nDuration: {video.length} seconds",
-                color=0x00ff00  # You can customize the color as needed
+                color=0x00FF00,  # You can customize the color as needed
             )
             embed.set_thumbnail(url=video.thumbnail_url)
             await ctx.send(embed=embed)
@@ -92,9 +101,9 @@ class YTDL(commands.Cog):
 
         finally:
             # Clean up the temporary files if they were created
-            if 'mp4_file_path' in locals() and os.path.exists(mp4_file_path):
+            if "mp4_file_path" in locals() and os.path.exists(mp4_file_path):
                 os.remove(mp4_file_path)
-            if 'mp3_file_path' in locals() and os.path.exists(mp3_file_path):
+            if "mp3_file_path" in locals() and os.path.exists(mp3_file_path):
                 os.remove(mp3_file_path)
 
         # Add a delay between requests

@@ -6,6 +6,7 @@ import base64
 import asyncio
 import io
 
+
 class EncryptionCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -64,7 +65,10 @@ class EncryptionCog(commands.Cog):
         if attempts >= 3:
             return None
 
-        self.decryption_attempts[user.id] = {"attempts": attempts + 1, "event": asyncio.Event()}
+        self.decryption_attempts[user.id] = {
+            "attempts": attempts + 1,
+            "event": asyncio.Event(),
+        }
         await user.send("Please enter the decryption key:")
 
         await self.decryption_attempts[user.id]["event"].wait()
@@ -83,7 +87,7 @@ class EncryptionCog(commands.Cog):
     async def decrypt_text(self, encrypted_text, decryption_key):
         key = base64.b64decode(decryption_key)
         cipher = ChaCha20Poly1305(key)
-        encrypted_text_parts = encrypted_text.split('\n')
+        encrypted_text_parts = encrypted_text.split("\n")
         nonce = bytes.fromhex(encrypted_text_parts[0])
         encrypted_data = bytes.fromhex(encrypted_text_parts[1])
         try:
@@ -109,6 +113,9 @@ class EncryptionCog(commands.Cog):
             file.write(key)
         return file_path
 
+
 def setup(bot):
     bot.add_cog(EncryptionCog(bot))
+
+
 print("Encryption Cog loaded.")
