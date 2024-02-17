@@ -16,14 +16,15 @@ class TTS(commands.Cog):
         self.accent = 'us'
 
     # tts command for the bot
+    # tts command for the bot
     @commands.command(name='tts', description='Converts text to speech and plays it in the voice channel.')
-    async def tts(self, ctx, message: str):
-        if not ctx.author.voice:  # Use ctx.author instead of ctx.user
+    async def tts(self, ctx, *, message: str):
+        if not ctx.author.voice:
             await ctx.send('Please join a voice channel first.')
             return
 
         guild = ctx.guild
-        voice_channel = ctx.author.voice.channel  # Use ctx.author instead of ctx.user
+        voice_channel = ctx.author.voice.channel
 
         if not self.voice_client or not self.voice_client.is_connected():
             self.voice_client = await voice_channel.connect()
@@ -34,11 +35,21 @@ class TTS(commands.Cog):
         source = nextcord.FFmpegPCMAudio('tts.mp3')
 
         if self.voice_client:
-            self.voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else None)
-            while self.voice_client.is_playing():
-                await asyncio.sleep(1)  # Use asyncio.sleep with await
+            def after_play(error):
+                if error:
+                    print('Player error: %s' % error)
+                os.remove('tts.mp3')
 
-            os.remove('tts.mp3')
+                # Add a delay of 5 minutes (300 seconds) before disconnecting
+                asyncio.run_coroutine_threadsafe(self.disconnect_after_delay(), self.client.loop)
+
+            self.voice_client.play(source, after=after_play)
+
+    async def disconnect_after_delay(self):
+        await asyncio.sleep(300)  # Adjust the duration as needed
+        if self.voice_client and self.voice_client.is_connected():
+            await self.voice_client.disconnect()
+            self.voice_client = None
 
     # leave command for tts
     @commands.command(name='leave', description='Leaves the voice channel.')
