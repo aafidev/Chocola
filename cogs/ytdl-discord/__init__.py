@@ -106,8 +106,6 @@ class YTDL(commands.Cog):
             if "mp3_file_path" in locals() and os.path.exists(mp3_file_path):
                 os.remove(mp3_file_path)
 
-        # Add a delay between requests
-        time.sleep(1)  # Sleep for 1 second
 
     @ytdl_command.error
     async def ytdl_error(self, ctx, error):

@@ -253,9 +253,7 @@ class SoundCog(commands.Cog):
         conn.commit()
         conn.close()
 
-    @nextcord.slash_command(
-        name="dls", description="Downloads the sound fx to the database."
-    )
+    @commands.command(name="dls", description="Downloads the sound fx to the database.")
     async def download_sound_command(self, ctx, sound_url, sound_name):
         guild_id = ctx.guild.id
 
@@ -295,7 +293,7 @@ class SoundCog(commands.Cog):
         embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)
         await ctx.send(embed=embed)
 
-    @nextcord.slash_command(name="es", description="Enables Sound FX!")
+    @commands.command(name="es", description="Enables Sound FX!")
     async def enable_sound_command(self, ctx):
         """
         Enables random sound effects throughout the entire server. Usage: >>enable_sound or >>es
@@ -320,7 +318,7 @@ class SoundCog(commands.Cog):
             )  # Set the author
             await ctx.send(embed=embed)
 
-    @nextcord.slash_command(name="ds", description="Disables Sound FX!")
+    @commands.command(name="ds", description="Disables Sound FX!")
     async def disable_sound_command(self, ctx):
         """
         Disables random sound effects throughout the entire server. Usage: >>disable_sound or >>ds
@@ -346,7 +344,7 @@ class SoundCog(commands.Cog):
             )  # Set the author
             await ctx.send(embed=embed)
 
-    @nextcord.slash_command(name="dc", description="Disconnects from the VC!")
+    @commands.command(name="dc", description="Disconnects from the VC!")
     async def disconnect(self, ctx):
         """
         Disconnects the bot from the voice channel: >>dc or >>disconnect
