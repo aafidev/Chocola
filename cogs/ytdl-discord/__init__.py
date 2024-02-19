@@ -118,6 +118,9 @@ class YTDL(commands.Cog):
             mp4_file_path = os.path.join(downloads_dir, f"{sanitized_title}.mp4")
             mp3_file_path = os.path.join(downloads_dir, f"{sanitized_title}.mp3")
 
+            audio = AudioSegment.from_file(mp4_file_path, format="mp4")
+            audio.export(mp3_file_path, format="mp3")
+
             # Handle Windows-specific file path issues
             mp4_file_path = os.path.abspath(mp4_file_path)
             mp3_file_path = os.path.abspath(mp3_file_path)
@@ -127,7 +130,7 @@ class YTDL(commands.Cog):
             file.close()
 
             # Send the MP3 file to the text channel
-            await ctx.send(file=nextcord.File(mp4_file_path))
+            await ctx.send(file=nextcord.File(mp3_file_path))
 
             # Send an embed with information about the YouTube video
             embed = nextcord.Embed(
