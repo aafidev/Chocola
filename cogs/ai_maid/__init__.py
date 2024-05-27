@@ -63,9 +63,9 @@ model = AutoModelForCausalLM.from_pretrained(model_name)
 def get_response(prompt):
     # Determine response length based on the length of the prompt
     prompt_length = len(prompt.split())
-    if prompt_length <= 50:
+    if (prompt_length <= 50):
         response_length = 'short'
-    elif prompt_length <= 150:
+    elif (prompt_length <= 150):
         response_length = 'medium'
     else:
         response_length = 'long'
@@ -124,15 +124,20 @@ class ConversationCog(commands.Cog):
         return ' '.join(non_gif_words).strip()
 
     def clean_messages_db(self):
-        # Remove messages containing any URLs from the messages database
+        # Cleans up chocolas dumb messages to itself. hopefully.
         all_messages = session.query(Message).all()
         for message in all_messages:
-            cleaned_content = self.strip_urls(message.content)
-            if not cleaned_content:  # If the message is empty after stripping URLs
+            if "<@986747491649224704>" in message.content:
+                session.delete(message)
+            if "<@&1187633067557400648>" in message.content:
                 session.delete(message)
             else:
-                message.content = cleaned_content
-                session.add(message)
+                cleaned_content = self.strip_urls(message.content)
+                if not cleaned_content:  # If the message is empty after stripping URLs
+                    session.delete(message)
+                else:
+                    message.content = cleaned_content
+                    session.add(message)
         session.commit()
 
     @commands.Cog.listener()
@@ -143,17 +148,18 @@ class ConversationCog(commands.Cog):
         # Increment message count
         self.message_count += 1
 
-        # Save message to the message database, stripping URLs first
-        stripped_content = self.strip_urls(message.content)
-        if stripped_content:
-            new_message = Message(content=stripped_content)
-            session.add(new_message)
-            session.commit()
+        # Save message to the message database, stripping URLs first and checking for specific mention
+        if "<@986747491649224704>" not in message.content:
+            stripped_content = self.strip_urls(message.content)
+            if stripped_content:
+                new_message = Message(content=stripped_content)
+                session.add(new_message)
+                session.commit()
 
-        # Check if bot's mention is present in the message content or if it's the 5th message
+        # Check if bot's mention is present in the message content or if it's the 10th message
         if self.bot.user.mentioned_in(message) or self.message_count % 10 == 0:
             # Decide whether to respond with a GIF or text
-            respond_with_gif = random.random() < 0.5  # Adjust the probability here, e.g., 50% chance for GIF
+            respond_with_gif = random.random() < 0.3  # Adjust the probability here, e.g., 30% chance for GIF
 
             if respond_with_gif:
                 gif = gif_session.query(Gif).order_by(func.random()).first()
