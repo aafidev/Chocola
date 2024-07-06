@@ -1,20 +1,20 @@
 from nextcord.ext import commands
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from sqlalchemy import create_engine, Column, Integer, String, Sequence, func
+from sqlalchemy import create_engine, Column, Integer, String, Sequence
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import random
-import nextcord
+import re
 
 # Specify the absolute path for the message database
-db_path = 'cogs/ai_maid/messages.db'
-engine = create_engine(f'sqlite:///{db_path}')
+db_path = "cogs/ai_maid/messages.db"
+engine = create_engine(f"sqlite:///{db_path}")
 Base = declarative_base()
 
 
 class Message(Base):
-    __tablename__ = 'messages'
-    id = Column(Integer, Sequence('message_id_seq'), primary_key=True)
+    __tablename__ = "messages"
+    id = Column(Integer, Sequence("message_id_seq"), primary_key=True)
     content = Column(String(250))
 
 
@@ -23,14 +23,14 @@ Session = sessionmaker(bind=engine)
 session = Session()
 
 # Specify the absolute path for the GIF database
-gif_db_path = 'cogs/ai_maid/gifs.db'
-gif_engine = create_engine(f'sqlite:///{gif_db_path}')
+gif_db_path = "cogs/ai_maid/gifs.db"
+gif_engine = create_engine(f"sqlite:///{gif_db_path}")
 GifBase = declarative_base()
 
 
 class Gif(GifBase):
-    __tablename__ = 'gifs'
-    id = Column(Integer, Sequence('gif_id_seq'), primary_key=True)
+    __tablename__ = "gifs"
+    id = Column(Integer, Sequence("gif_id_seq"), primary_key=True)
     url = Column(String(250))
 
 
@@ -39,14 +39,14 @@ GifSession = sessionmaker(bind=gif_engine)
 gif_session = GifSession()
 
 # Specify the absolute path for the links database
-links_db_path = 'cogs/ai_maid/links.db'
-links_engine = create_engine(f'sqlite:///{links_db_path}')
+links_db_path = "cogs/ai_maid/links.db"
+links_engine = create_engine(f"sqlite:///{links_db_path}")
 LinksBase = declarative_base()
 
 
 class Link(LinksBase):
-    __tablename__ = 'links'
-    id = Column(Integer, Sequence('link_id_seq'), primary_key=True)
+    __tablename__ = "links"
+    id = Column(Integer, Sequence("link_id_seq"), primary_key=True)
     url = Column(String(250))
 
 
@@ -55,40 +55,43 @@ LinksSession = sessionmaker(bind=links_engine)
 links_session = LinksSession()
 
 # Load Hugging Face model
-model_name = "microsoft/DialoGPT-medium"
+model_name = "openai/whisper-large-v3"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(model_name)
 
 
+def preprocess_text(text):
+    # Remove non-alphanumeric characters and extra spaces
+    text = re.sub(r"[^\w\s]", "", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def is_valid_message(text):
+    # Check if the text forms a coherent sentence
+    # You can customize this validation logic based on your requirements
+    words = text.split()
+    if len(words) >= 5:  # Adjust as needed
+        return True
+    return False
+
+
 def get_response(prompt):
-    # Determine response length based on the length of the prompt
-    prompt_length = len(prompt.split())
-    if (prompt_length <= 50):
-        response_length = 'short'
-    elif (prompt_length <= 150):
-        response_length = 'medium'
-    else:
-        response_length = 'long'
+    # Tokenize the prompt
+    input_ids = tokenizer.encode(prompt, return_tensors="pt")
 
-    # Define max length based on response length
-    if response_length == 'short':
-        max_length = 150
-    elif response_length == 'medium':
-        max_length = 300
-    elif response_length == 'long':
-        max_length = 500
-
-    # Get AI response
+    # Generate AI response
     ai_response = model.generate(
-        tokenizer(prompt, return_tensors='pt').input_ids,
-        max_length=max_length,
+        input_ids=input_ids,
+        max_length=150,  # Set maximum length for the response
         pad_token_id=tokenizer.eos_token_id,
         num_return_sequences=1,
-        temperature=0.9,  # Increase temperature for more randomness
+        temperature=0.9,  # Adjust temperature for randomness
         repetition_penalty=1.2,  # Adjust repetition penalty as needed
         num_beams=1,  # Set num_beams to 1 for no beam search
-        do_sample=True
+        do_sample=True,
     )
+
     # Decode the response
     response = tokenizer.decode(ai_response[0], skip_special_tokens=True)
     return response
@@ -100,10 +103,71 @@ class ConversationCog(commands.Cog):
         self.message_count = 0
         self.clean_messages_db()
 
-    def contains_gif(self, content):
-        # Define your GIF URL patterns or identifiers
-        gif_patterns = ["tenor.com/view", "giphy.com/gifs", "media.giphy.com"]  # Example patterns
-        return any(pattern in content for pattern in gif_patterns)
+    def cog_unload(self):
+        # Perform cleanup tasks if needed
+        pass
+
+    async def generate_response(self, channel):
+        # Determine whether to respond with a GIF or AI response
+        respond_with_gif = random.random() < 0.1  # 50% chance of responding with a GIF
+
+        if respond_with_gif:
+            await self.send_random_gif(channel)
+        else:
+            await self.generate_ai_response(channel)
+
+    async def send_random_gif(self, channel):
+        # Get all GIFs from the database
+        all_gifs = gif_session.query(Gif).all()
+
+        if all_gifs:
+            # Shuffle GIFs to add randomness
+            random.shuffle(all_gifs)
+
+            # Choose a random GIF to send
+            gif_url = random.choice(all_gifs).url
+
+            # Send GIF to the channel
+            await channel.send(gif_url)
+
+    async def generate_ai_response(self, channel):
+        # Get all non-empty messages from the database
+        all_messages = session.query(Message).filter(Message.content != "").all()
+
+        if all_messages:
+            # Shuffle messages to add randomness
+            random.shuffle(all_messages)
+
+            # Choose a random message to respond with
+            chosen_message = random.choice(all_messages).content
+
+            # Check if the chosen message forms a coherent sentence
+            if is_valid_message(chosen_message):
+                # Generate AI response based on the chosen message
+                ai_response = get_response(chosen_message)
+
+                # Send AI response to the channel
+                await channel.send(ai_response)
+            else:
+                # If the chosen message does not form a coherent sentence, retry
+                await self.generate_ai_response(channel)
+
+    def clean_messages_db(self):
+        # Clean up messages from bot and specific mentions
+        all_messages = session.query(Message).all()
+        for message in all_messages:
+            if (
+                "<@986747491649224704>" in message.content
+            ):  # Replace with your bot's mention ID
+                session.delete(message)
+            else:
+                cleaned_content = preprocess_text(message.content)
+                if not cleaned_content:  # If the message is empty after preprocessing
+                    session.delete(message)
+                else:
+                    message.content = cleaned_content
+                    session.add(message)
+        session.commit()
 
     def strip_urls(self, content):
         words = content.split()
@@ -121,24 +185,16 @@ class ConversationCog(commands.Cog):
                     links_session.commit()
             else:
                 non_gif_words.append(word)
-        return ' '.join(non_gif_words).strip()
+        return " ".join(non_gif_words).strip()
 
-    def clean_messages_db(self):
-        # Cleans up chocolas dumb messages to itself. hopefully.
-        all_messages = session.query(Message).all()
-        for message in all_messages:
-            if "<@986747491649224704>" in message.content:
-                session.delete(message)
-            if "<@&1187633067557400648>" in message.content:
-                session.delete(message)
-            else:
-                cleaned_content = self.strip_urls(message.content)
-                if not cleaned_content:  # If the message is empty after stripping URLs
-                    session.delete(message)
-                else:
-                    message.content = cleaned_content
-                    session.add(message)
-        session.commit()
+    def contains_gif(self, content):
+        # Define your GIF URL patterns or identifiers
+        gif_patterns = [
+            "tenor.com/view",
+            "giphy.com/gifs",
+            "media.giphy.com",
+        ]  # Example patterns
+        return any(pattern in content for pattern in gif_patterns)
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -148,41 +204,28 @@ class ConversationCog(commands.Cog):
         # Increment message count
         self.message_count += 1
 
-        # Save message to the message database, stripping URLs first and checking for specific mention
-        if "<@986747491649224704>" not in message.content:
-            stripped_content = self.strip_urls(message.content)
-            if stripped_content:
-                new_message = Message(content=stripped_content)
-                session.add(new_message)
-                session.commit()
+        # Check if the message is a direct mention without a question mark
+        if message.content.startswith(
+            "<@986747491649224704>"
+        ):  # Replace with your bot's mention ID
+            await self.generate_response(message.channel)
 
-        # Check if bot's mention is present in the message content or if it's the 10th message
-        if self.bot.user.mentioned_in(message) or self.message_count % 10 == 0:
-            # Decide whether to respond with a GIF or text
-            respond_with_gif = random.random() < 0.3  # Adjust the probability here, e.g., 30% chance for GIF
+        # Check if the message ends with a question mark
+        elif message.content.endswith("?"):
+            # Generate AI response for questions
+            ai_response = get_response(message.content)
 
-            if respond_with_gif:
-                gif = gif_session.query(Gif).order_by(func.random()).first()
-                if gif:
-                    await message.channel.send(gif.url)
-            else:
-                # Get AI response based on the last 5 messages
-                # Get all messages from the database
-                all_messages = session.query(Message).all()
+            # Send AI response to the channel
+            await message.channel.send(ai_response)
 
-                # Select 5 random messages
-                if len(all_messages) >= 5:
-                    random_messages = random.sample(all_messages, 5)
-                    # Concatenate messages into a single prompt
-                    prompt = " ".join(msg.content for msg in random_messages)
+        # For other messages, respond with a generated message based on accumulated messages
+        else:
+            await self.generate_response(message.channel)
 
-                    # Get AI response
-                    ai_response = get_response(prompt)
 
-                    # Send AI response to Discord
-                    await message.channel.send(ai_response)
-
-# Function to setup cog
+# Required setup function for the cog
 def setup(bot):
     bot.add_cog(ConversationCog(bot))
-    print("ConversationCog loaded!")
+
+
+print("AI Maid Cog Loaded!")
