@@ -11,12 +11,10 @@ db_path = "cogs/ai_maid/messages.db"
 engine = create_engine(f"sqlite:///{db_path}")
 Base = declarative_base()
 
-
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, Sequence("message_id_seq"), primary_key=True)
     content = Column(String(250))
-
 
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
@@ -27,12 +25,10 @@ gif_db_path = "cogs/ai_maid/gifs.db"
 gif_engine = create_engine(f"sqlite:///{gif_db_path}")
 GifBase = declarative_base()
 
-
 class Gif(GifBase):
     __tablename__ = "gifs"
     id = Column(Integer, Sequence("gif_id_seq"), primary_key=True)
     url = Column(String(250))
-
 
 GifBase.metadata.create_all(gif_engine)
 GifSession = sessionmaker(bind=gif_engine)
@@ -43,12 +39,10 @@ links_db_path = "cogs/ai_maid/links.db"
 links_engine = create_engine(f"sqlite:///{links_db_path}")
 LinksBase = declarative_base()
 
-
 class Link(LinksBase):
     __tablename__ = "links"
     id = Column(Integer, Sequence("link_id_seq"), primary_key=True)
     url = Column(String(250))
-
 
 LinksBase.metadata.create_all(links_engine)
 LinksSession = sessionmaker(bind=links_engine)
@@ -59,13 +53,11 @@ model_name = "openai/whisper-large-v3"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(model_name)
 
-
 def preprocess_text(text):
     # Remove non-alphanumeric characters and extra spaces
     text = re.sub(r"[^\w\s]", "", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
-
 
 def is_valid_message(text):
     # Check if the text forms a coherent sentence
@@ -74,7 +66,6 @@ def is_valid_message(text):
     if len(words) >= 5:  # Adjust as needed
         return True
     return False
-
 
 def get_response(prompt):
     # Tokenize the prompt
@@ -96,7 +87,6 @@ def get_response(prompt):
     response = tokenizer.decode(ai_response[0], skip_special_tokens=True)
     return response
 
-
 class ConversationCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -109,7 +99,7 @@ class ConversationCog(commands.Cog):
 
     async def generate_response(self, channel):
         # Determine whether to respond with a GIF or AI response
-        respond_with_gif = random.random() < 0.1  # 50% chance of responding with a GIF
+        respond_with_gif = random.random() < 0.1  # 10% chance of responding with a GIF
 
         if respond_with_gif:
             await self.send_random_gif(channel)
@@ -157,7 +147,7 @@ class ConversationCog(commands.Cog):
         all_messages = session.query(Message).all()
         for message in all_messages:
             if (
-                "<@986747491649224704>" in message.content
+                "<@!986747491649224704>" in message.content
             ):  # Replace with your bot's mention ID
                 session.delete(message)
             else:
@@ -201,31 +191,22 @@ class ConversationCog(commands.Cog):
         if message.author == self.bot.user:
             return
 
-        # Increment message count
+        # Check if the bot was mentioned
+        if self.bot.user.mentioned_in(message):
+            await self.generate_response(message.channel)
+            return
+
+        # Increment message count after checking direct mention
         self.message_count += 1
 
-        # Check if the message is a direct mention without a question mark
-        if message.content.startswith(
-            "<@986747491649224704>"
-        ):  # Replace with your bot's mention ID
+        # Only respond every 20 messages unless directly pinged
+        if self.message_count % 20 == 0:
             await self.generate_response(message.channel)
-
-        # Check if the message ends with a question mark
-        elif message.content.endswith("?"):
-            # Generate AI response for questions
-            ai_response = get_response(message.content)
-
-            # Send AI response to the channel
-            await message.channel.send(ai_response)
-
-        # For other messages, respond with a generated message based on accumulated messages
-        else:
-            await self.generate_response(message.channel)
-
+            self.message_count = 0  # Reset message count after responding
+            return
 
 # Required setup function for the cog
 def setup(bot):
     bot.add_cog(ConversationCog(bot))
-
 
 print("AI Maid Cog Loaded!")
