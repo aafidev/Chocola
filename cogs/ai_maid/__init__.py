@@ -188,7 +188,7 @@ class ConversationCog(commands.Cog):
         ai_response = model.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            max_length=75,
+            max_new_tokens=512,
             pad_token_id=tokenizer.eos_token_id,
             num_return_sequences=1,
             temperature=0.9,
