@@ -69,11 +69,8 @@ RECENT_RESPONSES_HISTORY_SIZE = 10
 
 
 def preprocess_text(text):
-    # Remove Discord emotes and content with numbers
-    text = re.sub(r"<:[a-zA-Z0-9_]+:[0-9]+>", "", text)  # Remove Discord emotes
-    text = re.sub(r"\b\d+\b", "", text)  # Remove isolated numbers
-    text = re.sub(r"[^\w\s]", "", text)  # Remove punctuation
-    text = re.sub(r"\s+", " ", text)  # Remove extra whitespaces
+    text = re.sub(r"[^\w\s]", "", text)
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
@@ -172,25 +169,38 @@ class ConversationCog(commands.Cog):
         return any(pattern in content for pattern in gif_patterns)
 
     def get_response(self, prompt):
+        if not prompt:
+            return "Error: Prompt is empty or invalid."
+
+        # Tokenize the prompt
         input_ids = tokenizer.encode(prompt, return_tensors="pt")
 
+        if input_ids is None or input_ids.numel() == 0:
+            return "Error: Unable to tokenize input."
+
+        # Ensure attention mask is set for input_ids
+        if tokenizer.pad_token_id is not None:
+            attention_mask = input_ids.ne(tokenizer.pad_token_id)
+        else:
+            attention_mask = input_ids.new_ones(input_ids.shape)
+
+        # Generate AI response
         ai_response = model.generate(
             input_ids=input_ids,
-            max_length=75,  # Adjust maximum length here
+            attention_mask=attention_mask,
+            max_length=75,
             pad_token_id=tokenizer.eos_token_id,
-            temperature=0.7,  # Adjust temperature for diversity
-            top_p=0.9,  # Adjust top_p for nucleus sampling
-            num_beams=5,  # Adjust num_beams for diverse beam search
-            length_penalty=0.8,  # Adjust length_penalty for response length encouragement
-            no_repeat_ngram_size=3,  # Adjust no_repeat_ngram_size to prevent repetitive n-grams
+            num_return_sequences=1,
+            temperature=0.9,
+            top_p=0.9,
+            length_penalty=0.8,
+            repetition_penalty=1.2,
+            no_repeat_ngram_size=3,
+            num_beams=5,  # Adjust num_beams to an integer greater than 1
             do_sample=True,
         )
 
         response = tokenizer.decode(ai_response[0], skip_special_tokens=True)
-
-        # Add the response to recent responses history
-        self.recent_responses.append(response)
-
         return response
 
     def get_conversation_context(self, messages, chosen_message):
