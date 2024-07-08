@@ -69,8 +69,11 @@ RECENT_RESPONSES_HISTORY_SIZE = 10
 
 
 def preprocess_text(text):
-    text = re.sub(r"[^\w\s]", "", text)
-    text = re.sub(r"\s+", " ", text)
+    # Remove Discord emotes and content with numbers
+    text = re.sub(r"<:[a-zA-Z0-9_]+:[0-9]+>", "", text)  # Remove Discord emotes
+    text = re.sub(r"\b\d+\b", "", text)  # Remove isolated numbers
+    text = re.sub(r"[^\w\s]", "", text)  # Remove punctuation
+    text = re.sub(r"\s+", " ", text)  # Remove extra whitespaces
     return text.strip()
 
 
@@ -173,7 +176,7 @@ class ConversationCog(commands.Cog):
 
         ai_response = model.generate(
             input_ids=input_ids,
-            max_length=150,
+            max_length=75,  # Adjust maximum length here
             pad_token_id=tokenizer.eos_token_id,
             num_return_sequences=1,
             temperature=0.9,
