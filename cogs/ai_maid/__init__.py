@@ -178,15 +178,19 @@ class ConversationCog(commands.Cog):
             input_ids=input_ids,
             max_length=75,  # Adjust maximum length here
             pad_token_id=tokenizer.eos_token_id,
-            num_return_sequences=1,
             temperature=0.7,  # Adjust temperature for diversity
-            top_k=50,  # Adjust top_k for diversity
-            repetition_penalty=1.2,
-            num_beams=1,
+            top_p=0.9,  # Adjust top_p for nucleus sampling
+            num_beams=5,  # Adjust num_beams for diverse beam search
+            length_penalty=0.8,  # Adjust length_penalty for response length encouragement
+            no_repeat_ngram_size=3,  # Adjust no_repeat_ngram_size to prevent repetitive n-grams
             do_sample=True,
         )
 
         response = tokenizer.decode(ai_response[0], skip_special_tokens=True)
+
+        # Add the response to recent responses history
+        self.recent_responses.append(response)
+
         return response
 
     def get_conversation_context(self, messages, chosen_message):
