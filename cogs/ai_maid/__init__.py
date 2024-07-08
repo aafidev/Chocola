@@ -179,7 +179,8 @@ class ConversationCog(commands.Cog):
             max_length=75,  # Adjust maximum length here
             pad_token_id=tokenizer.eos_token_id,
             num_return_sequences=1,
-            temperature=0.9,
+            temperature=0.7,  # Adjust temperature for diversity
+            top_k=50,  # Adjust top_k for diversity
             repetition_penalty=1.2,
             num_beams=1,
             do_sample=True,
