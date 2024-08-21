@@ -1,10 +1,12 @@
+import random
+import re
+from collections import deque
 from nextcord.ext import commands
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from sentence_transformers import SentenceTransformer, util
 from sqlalchemy import create_engine, Column, Integer, String, Sequence
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import random
-import re
 
 # Specify the absolute path for the message database
 db_path = "cogs/ai_maid/messages.db"
@@ -54,47 +56,27 @@ LinksBase.metadata.create_all(links_engine)
 LinksSession = sessionmaker(bind=links_engine)
 links_session = LinksSession()
 
-# Load Hugging Face model
-model_name = "openai/whisper-large-v3"
+# Load Hugging Face model for response generation
+model_name = "microsoft/DialoGPT-large"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(model_name)
 
+# Load sentence transformer model for context understanding
+context_model = SentenceTransformer('msmarco-distilbert-base-v4')
+
+# Number of recent responses to keep in history
+RECENT_RESPONSES_HISTORY_SIZE = 10
+
 
 def preprocess_text(text):
-    # Remove non-alphanumeric characters and extra spaces
     text = re.sub(r"[^\w\s]", "", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
 def is_valid_message(text):
-    # Check if the text forms a coherent sentence
-    # You can customize this validation logic based on your requirements
     words = text.split()
-    if len(words) >= 5:  # Adjust as needed
-        return True
-    return False
-
-
-def get_response(prompt):
-    # Tokenize the prompt
-    input_ids = tokenizer.encode(prompt, return_tensors="pt")
-
-    # Generate AI response
-    ai_response = model.generate(
-        input_ids=input_ids,
-        max_length=150,  # Set maximum length for the response
-        pad_token_id=tokenizer.eos_token_id,
-        num_return_sequences=1,
-        temperature=0.9,  # Adjust temperature for randomness
-        repetition_penalty=1.2,  # Adjust repetition penalty as needed
-        num_beams=1,  # Set num_beams to 1 for no beam search
-        do_sample=True,
-    )
-
-    # Decode the response
-    response = tokenizer.decode(ai_response[0], skip_special_tokens=True)
-    return response
+    return len(words) >= 5  # Adjust as needed
 
 
 class ConversationCog(commands.Cog):
@@ -102,14 +84,13 @@ class ConversationCog(commands.Cog):
         self.bot = bot
         self.message_count = 0
         self.clean_messages_db()
+        self.recent_responses = deque(maxlen=RECENT_RESPONSES_HISTORY_SIZE)
 
     def cog_unload(self):
-        # Perform cleanup tasks if needed
         pass
 
     async def generate_response(self, channel):
-        # Determine whether to respond with a GIF or AI response
-        respond_with_gif = random.random() < 0.1  # 50% chance of responding with a GIF
+        respond_with_gif = random.random() < 0.1  # 10% chance of responding with a GIF
 
         if respond_with_gif:
             await self.send_random_gif(channel)
@@ -117,52 +98,44 @@ class ConversationCog(commands.Cog):
             await self.generate_ai_response(channel)
 
     async def send_random_gif(self, channel):
-        # Get all GIFs from the database
         all_gifs = gif_session.query(Gif).all()
 
         if all_gifs:
-            # Shuffle GIFs to add randomness
             random.shuffle(all_gifs)
-
-            # Choose a random GIF to send
             gif_url = random.choice(all_gifs).url
-
-            # Send GIF to the channel
             await channel.send(gif_url)
 
-    async def generate_ai_response(self, channel):
-        # Get all non-empty messages from the database
+    async def generate_ai_response(self, channel, retry_count=0):
         all_messages = session.query(Message).filter(Message.content != "").all()
 
         if all_messages:
-            # Shuffle messages to add randomness
             random.shuffle(all_messages)
-
-            # Choose a random message to respond with
             chosen_message = random.choice(all_messages).content
 
-            # Check if the chosen message forms a coherent sentence
             if is_valid_message(chosen_message):
-                # Generate AI response based on the chosen message
-                ai_response = get_response(chosen_message)
+                messages = [message.content for message in all_messages]
+                prompt = self.get_conversation_context(messages, chosen_message)
+                ai_response = self.get_response(prompt)
 
-                # Send AI response to the channel
-                await channel.send(ai_response)
+                if ai_response not in self.recent_responses:
+                    self.recent_responses.append(ai_response)
+                    await channel.send(ai_response)
+                else:
+                    await self.generate_ai_response(channel, retry_count + 1)
             else:
-                # If the chosen message does not form a coherent sentence, retry
-                await self.generate_ai_response(channel)
+                if retry_count < 5:  # Limit the number of retries
+                    await self.generate_ai_response(channel, retry_count + 1)
+                else:
+                    await channel.send("Failed to generate a valid response after multiple attempts.")
 
     def clean_messages_db(self):
-        # Clean up messages from bot and specific mentions
         all_messages = session.query(Message).all()
         for message in all_messages:
-            if (
-                "<@986747491649224704>" in message.content
-            ):  # Replace with your bot's mention ID
+            if "<@!986747491649224704>" in message.content:  # Replace with your bot's mention ID
                 session.delete(message)
             else:
                 cleaned_content = preprocess_text(message.content)
-                if not cleaned_content:  # If the message is empty after preprocessing
+                if not cleaned_content:
                     session.delete(message)
                 else:
                     message.content = cleaned_content
@@ -188,42 +161,86 @@ class ConversationCog(commands.Cog):
         return " ".join(non_gif_words).strip()
 
     def contains_gif(self, content):
-        # Define your GIF URL patterns or identifiers
         gif_patterns = [
             "tenor.com/view",
             "giphy.com/gifs",
             "media.giphy.com",
-        ]  # Example patterns
+        ]
         return any(pattern in content for pattern in gif_patterns)
+
+    def get_response(self, prompt):
+        if not prompt:
+            return "Error: Prompt is empty or invalid."
+
+        # Tokenize the prompt
+        input_ids = tokenizer.encode(prompt, return_tensors="pt")
+
+        if input_ids is None or input_ids.numel() == 0:
+            return "Error: Unable to tokenize input."
+
+        # Ensure attention mask is set for input_ids
+        if tokenizer.pad_token_id is not None:
+            attention_mask = input_ids.ne(tokenizer.pad_token_id)
+        else:
+            attention_mask = input_ids.new_ones(input_ids.shape)
+
+        # Generate AI response
+        ai_response = model.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            max_new_tokens=512,
+            pad_token_id=tokenizer.eos_token_id,
+            num_return_sequences=1,
+            temperature=0.9,
+            top_p=0.9,
+            length_penalty=0.8,
+            repetition_penalty=1.2,
+            no_repeat_ngram_size=3,
+            num_beams=5,  # Adjust num_beams to an integer greater than 1
+            do_sample=True,
+        )
+
+        response = tokenizer.decode(ai_response[0], skip_special_tokens=True)
+        return response
+
+    def get_conversation_context(self, messages, chosen_message):
+        # Encode all messages including the chosen one
+        message_embeddings = context_model.encode(messages + [chosen_message], convert_to_tensor=True)
+
+        # Compute cosine similarities between the chosen message and all previous messages
+        similarities = util.pytorch_cos_sim(message_embeddings[-1], message_embeddings[:-1])
+
+        # Get the most similar messages
+        most_similar_idx = similarities.topk(5)[1].tolist()  # Get indices of the top 5 similar messages and convert to list
+
+        # Flatten the list of lists
+        most_similar_idx = [idx for sublist in most_similar_idx for idx in sublist]
+
+        context = " ".join([messages[idx] for idx in most_similar_idx])
+        return f"{context} {chosen_message}"
 
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author == self.bot.user:
             return
 
-        # Increment message count
+        # Store the recent message in the conversation history database
+        new_message = Message(content=message.content)
+        session.add(new_message)
+        session.commit()
+
+        # Check if the bot was mentioned
+        if self.bot.user.mentioned_in(message):
+            await self.generate_response(message.channel)
+            return
+
         self.message_count += 1
 
-        # Check if the message is a direct mention without a question mark
-        if message.content.startswith(
-            "<@986747491649224704>"
-        ):  # Replace with your bot's mention ID
+        if self.message_count % 20 == 0:
             await self.generate_response(message.channel)
-
-        # Check if the message ends with a question mark
-        elif message.content.endswith("?"):
-            # Generate AI response for questions
-            ai_response = get_response(message.content)
-
-            # Send AI response to the channel
-            await message.channel.send(ai_response)
-
-        # For other messages, respond with a generated message based on accumulated messages
-        else:
-            await self.generate_response(message.channel)
+            self.message_count = 0
 
 
-# Required setup function for the cog
 def setup(bot):
     bot.add_cog(ConversationCog(bot))
 
